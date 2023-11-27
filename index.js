@@ -175,6 +175,22 @@ async function run() {
     });
 
     // acticles api
+
+    app.get('/articles', verifyToken, async(req,res)=>{
+      const page = parseInt(req.query.page);
+      const size = parseInt(req.query.size);
+      const result = await articlesCollection.find()
+      .skip(page * size)
+      .limit(size)
+      .toArray();
+      res.send(result);
+    })
+
+    app.get('/articlesCount', async(req,res)=>{
+      const count = await articlesCollection.estimatedDocumentCount();
+      res.send({count});
+    })
+
     app.post("/articles", async(req,res)=>{
       const newArticle = req.body;
       const result = await articlesCollection.insertOne(newArticle);
