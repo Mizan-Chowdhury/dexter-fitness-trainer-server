@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
@@ -72,8 +72,12 @@ async function run() {
     const subscribersCollection = client
       .db("dexterFitnessTrainer")
       .collection("subscribers");
-    const usersCollection = client.db("dexterFitnessTrainer").collection("users");
-    const newTrainersCollection = client.db("dexterFitnessTrainer").collection("newTrainers");
+    const usersCollection = client
+      .db("dexterFitnessTrainer")
+      .collection("users");
+    const newTrainersCollection = client
+      .db("dexterFitnessTrainer")
+      .collection("newTrainers");
 
     // gallery photos api
     app.get("/photos", async (req, res) => {
@@ -113,16 +117,24 @@ async function run() {
     });
 
     // new trainers api
-    app.get('/trainers', async(req,res)=>{
-      const result = await newTrainersCollection.find().toArray();
+    app.get("/trainers", async (req, res) => {
+      const query = { role: "trainer" };
+      const result = await newTrainersCollection.find(query).toArray();
       res.send(result);
     });
 
-    app.post('/newTrainers', async(req,res)=>{
-      const newTrainers = req.body;
-      const result = await newTrainersCollection.insertOne(newTrainers)
+    app.get('/trainers/:id', async(req,res)=>{
+      const id = req.params.id;
+      const query = {_id : new ObjectId(id)}
+      const result = await newTrainersCollection.findOne(query);
       res.send(result);
     })
+
+    app.post("/newTrainers", async (req, res) => {
+      const newTrainers = req.body;
+      const result = await newTrainersCollection.insertOne(newTrainers);
+      res.send(result);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
