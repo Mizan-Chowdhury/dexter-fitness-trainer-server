@@ -155,6 +155,14 @@ async function run() {
     });
 
     // new trainers api
+
+    app.get('/applicantTrainer', async(req,res)=>{
+      const query = {role: 'member'}
+      const result = await newTrainersCollection.find(query).toArray();
+      res.send(result);
+    })
+
+
     app.get("/trainers", async (req, res) => {
       const query = { role: "trainer" };
       const result = await newTrainersCollection.find(query).toArray();
