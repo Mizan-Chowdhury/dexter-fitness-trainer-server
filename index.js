@@ -8,11 +8,13 @@ const port = process.env.PORT || 5000;
 const app = express();
 
 // middlewares
-app.use(cors({
-  origin : ['http://localhost:5173'],
-  credentials: true,
-  // optionsSuccessStatus: 200
-}));
+app.use(
+  cors({
+    origin: ["http://localhost:5173"],
+    credentials: true,
+    // optionsSuccessStatus: 200
+  })
+);
 app.use(express.json());
 app.use(cookieParser());
 
@@ -45,9 +47,9 @@ async function run() {
     });
 
     // remove token
-    app.post('/logout', (req, res)=>{
-      res.clearCookie('token',{maxAge:0}).send({success:false})
-    })
+    app.post("/logout", (req, res) => {
+      res.clearCookie("token", { maxAge: 0 }).send({ success: false });
+    });
 
     // token verify middleware
     const verifyToken = (req, res, next) => {
@@ -64,20 +66,21 @@ async function run() {
       });
     };
 
-    const galleryPhotos = client
+    const galleryPhotosCollection = client
       .db("dexterFitnessTrainer")
       .collection("galleryPhotos");
-    const subscribers = client
+    const subscribersCollection = client
       .db("dexterFitnessTrainer")
       .collection("subscribers");
-    const users = client.db("dexterFitnessTrainer").collection("users");
+    const usersCollection = client.db("dexterFitnessTrainer").collection("users");
+    const newTrainersCollection = client.db("dexterFitnessTrainer").collection("newTrainers");
 
     // gallery photos api
     app.get("/photos", async (req, res) => {
       const limit = parseInt(req.query.limit);
       const page = parseInt(req.query.page);
-      const totalCount = await galleryPhotos.estimatedDocumentCount();
-      const result = await galleryPhotos
+      const totalCount = await galleryPhotosCollection.estimatedDocumentCount();
+      const result = await galleryPhotosCollection
         .find()
         .skip(page)
         .limit(limit)
@@ -86,13 +89,14 @@ async function run() {
     });
 
     // subscribers api
-    app.get('/subscribers', async(req,res)=>{
-      const result = await subscribers.find().toArray();
+    app.get("/subscribers", verifyToken, async (req, res) => {
+      const result = await subscribersCollection.find().toArray();
       res.send(result);
-    })
+    });
+
     app.post("/subscribers", async (req, res) => {
       const newSubscriber = req.body;
-      const result = await subscribers.insertOne(newSubscriber);
+      const result = await subscribersCollection.insertOne(newSubscriber);
       res.send(result);
     });
 
@@ -100,13 +104,25 @@ async function run() {
     app.post("/users", async (req, res) => {
       const newUser = req.body;
       const query = { email: newUser.email };
-      const insertedUser = await users.findOne(query);
+      const insertedUser = await usersCollection.findOne(query);
       if (insertedUser) {
         return res.send({ message: "user already existed", insertedId: null });
       }
-      const result = await users.insertOne(newUser);
+      const result = await usersCollection.insertOne(newUser);
       res.send(result);
     });
+
+    // new trainers api
+    app.get('/trainers', async(req,res)=>{
+      const result = await newTrainersCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.post('/newTrainers', async(req,res)=>{
+      const newTrainers = req.body;
+      const result = await newTrainersCollection.insertOne(newTrainers)
+      res.send(result);
+    })
 
     await client.db("admin").command({ ping: 1 });
     console.log(
