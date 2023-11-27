@@ -78,6 +78,9 @@ async function run() {
     const newTrainersCollection = client
       .db("dexterFitnessTrainer")
       .collection("newTrainers");
+    const articlesCollection = client
+      .db("dexterFitnessTrainer")
+      .collection("articles");
 
     // gallery photos api
     app.get("/photos", async (req, res) => {
@@ -105,7 +108,14 @@ async function run() {
     });
 
     // users api
-    app.get("/users/admin/:email",verifyToken, async (req, res) => {
+    app.get('/users/:email', async(req,res)=>{
+      const email = req.params.email;
+      const query = {email : email}
+      const result = await usersCollection.findOne(query);
+      res.send(result);
+    })
+
+    app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       if (email !== req.decoded.email) {
         return res.status(403).send({ message: "forbidden access" });
@@ -117,6 +127,20 @@ async function run() {
         admin = user?.role === "admin";
       }
       res.send(admin);
+    });
+
+    app.get("/users/trainer/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      let trainer = false;
+      if (user) {
+        trainer = user?.role === "trainer";
+      }
+      res.send(trainer);
     });
 
     app.post("/users", async (req, res) => {
@@ -147,6 +171,13 @@ async function run() {
     app.post("/newTrainers", async (req, res) => {
       const newTrainers = req.body;
       const result = await newTrainersCollection.insertOne(newTrainers);
+      res.send(result);
+    });
+
+    // acticles api
+    app.post("/articles", async(req,res)=>{
+      const newArticle = req.body;
+      const result = await articlesCollection.insertOne(newArticle);
       res.send(result);
     });
 
