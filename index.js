@@ -61,7 +61,7 @@ async function run() {
         if (err) {
           return res.status(401).send({ error: "unAuthorized" });
         }
-        req.user = decoded;
+        req.decoded = decoded;
         next();
       });
     };
@@ -105,6 +105,20 @@ async function run() {
     });
 
     // users api
+    app.get("/users/admin/:email",verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send(admin);
+    });
+
     app.post("/users", async (req, res) => {
       const newUser = req.body;
       const query = { email: newUser.email };
@@ -123,12 +137,12 @@ async function run() {
       res.send(result);
     });
 
-    app.get('/trainers/:id', async(req,res)=>{
+    app.get("/trainers/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id : new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const result = await newTrainersCollection.findOne(query);
       res.send(result);
-    })
+    });
 
     app.post("/newTrainers", async (req, res) => {
       const newTrainers = req.body;
