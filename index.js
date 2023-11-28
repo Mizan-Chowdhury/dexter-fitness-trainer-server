@@ -81,6 +81,9 @@ async function run() {
     const articlesCollection = client
       .db("dexterFitnessTrainer")
       .collection("articles");
+    const classesCollection = client
+      .db("dexterFitnessTrainer")
+      .collection("classes");
 
     // gallery photos api
     app.get("/photos", async (req, res) => {
@@ -112,6 +115,12 @@ async function run() {
       const email = req.params.email;
       const query = {email : email}
       const result = await usersCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.get('/allTrainers', async(req,res)=>{
+      const query = { role : 'trainer'}
+      const result = await usersCollection.find(query).toArray();
       res.send(result);
     })
 
@@ -162,6 +171,30 @@ async function run() {
       res.send(result);
     })
 
+    app.patch('/applicantTrainer/:id', async(req,res)=>{
+      const id = req.params.id;
+      const updatedRole = req.body;
+      console.log(id, updatedRole);
+
+      const query = {_id : new ObjectId(id)}
+      const updatedDoc = {
+        $set: {
+          role: updatedRole.role,
+        },
+      };
+      const result = await newTrainersCollection.updateOne(query, updatedDoc)
+
+
+      const query2 = {email: updatedRole.email}
+      const updatedUser = {
+        $set: {
+          role: updatedRole.role,
+          payment: 'pending'
+        },
+      };
+      const result2 = await usersCollection.updateOne(query2, updatedUser)
+      res.send({result, result2});
+    })
 
     app.get("/trainers", async (req, res) => {
       const query = { role: "trainer" };
@@ -204,6 +237,19 @@ async function run() {
       const result = await articlesCollection.insertOne(newArticle);
       res.send(result);
     });
+
+    // all classes api
+
+    app.get('/classes', async(req,res)=>{
+      const result = await classesCollection.find().toArray();
+      res.send(result);
+    })
+
+    app.post('/classes', async(req,res)=>{
+      const newClass = req.body;
+      const result = await classesCollection.insertOne(newClass);
+      res.send(result);
+    })
 
     await client.db("admin").command({ ping: 1 });
     console.log(
