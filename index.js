@@ -3,20 +3,21 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-const cookieParser = require("cookie-parser");
 const port = process.env.PORT || 5000;
 const app = express();
+// const cookieParser = require("cookie-parser");
+// {
+//   origin: ["http://localhost:5173"],
+//   credentials: true,
+//   optionsSuccessStatus: 200
+// }
+// app.use(cookieParser());
+
+
 
 // middlewares
-app.use(
-  cors({
-    origin: ["http://localhost:5173"],
-    credentials: true,
-    // optionsSuccessStatus: 200
-  })
-);
+app.use(cors());
 app.use(express.json());
-app.use(cookieParser());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.qzinma9.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -34,29 +35,20 @@ async function run() {
     // create secret token
     app.post("/jwt", (req, res) => {
       const user = req.body;
+      // console.log(user, 'from create token');
       const token = jwt.sign(user, process.env.SECRET_TOKEN, {
-        expiresIn: "1h",
+        expiresIn: "240h",
       });
-      res
-        .cookie("token", token, {
-          httpOnly: true,
-          secure: true,
-          sameSite: "none",
-        })
-        .send({ success: true });
-    });
-
-    // remove token
-    app.post("/logout", (req, res) => {
-      res.clearCookie("token", { maxAge: 0 }).send({ success: false });
+      res.send({ token });
     });
 
     // token verify middleware
     const verifyToken = (req, res, next) => {
-      const token = req.cookies.token;
-      if (!token) {
-        return res.status(401).send({ error: "unAuthorized" });
+      // console.log("from verifyToken", req.headers);
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "unauthorized access" });
       }
+      const token = req.headers.authorization.split(" ")[1];
       jwt.verify(token, process.env.SECRET_TOKEN, (err, decoded) => {
         if (err) {
           return res.status(401).send({ error: "unAuthorized" });
@@ -84,6 +76,13 @@ async function run() {
     const classesCollection = client
       .db("dexterFitnessTrainer")
       .collection("classes");
+    const bookingPlansCollection = client
+      .db("dexterFitnessTrainer")
+      .collection("bookingPlans");
+
+    const bookingTrainerCollection = client
+      .db("dexterFitnessTrainer")
+      .collection("booking");
 
     // gallery photos api
     app.get("/photos", async (req, res) => {
@@ -98,8 +97,46 @@ async function run() {
       res.send({ totalCount, result });
     });
 
+    // trainer booking api
+    app.post("/bookingTrainer", async (req, res) => {
+      const classAndSlot = req.body;
+      const result = await bookingTrainerCollection.insertOne(classAndSlot);
+      res.send(result);
+    });
+
+    app.patch("/bookingTrainer/:id", async (req, res) => {
+      const id = req.params.id;
+      const newRole = req.body.role;
+      const query = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: newRole,
+        },
+      };
+      const result = await bookingTrainerCollection.updateOne(
+        query,
+        updatedDoc
+      );
+
+      const query2 = { role: "member" };
+      const result2 = await usersCollection.updateOne(query2, updatedDoc);
+      res.send({ result, result2 });
+    });
+
+    app.get("/bookingPlans", async (req, res) => {
+      const result = await bookingPlansCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.get("/allMember/:email", async (req, res) => {
+      const trainerEmail = req.params.email;
+      const query = { trainerEmail: trainerEmail, role: "member" };
+      const result = await bookingTrainerCollection.find(query).toArray();
+      res.send(result);
+    });
+
     // subscribers api
-    app.get("/subscribers", verifyToken, async (req, res) => {
+    app.get("/subscribers", async (req, res) => {
       const result = await subscribersCollection.find().toArray();
       res.send(result);
     });
@@ -111,18 +148,18 @@ async function run() {
     });
 
     // users api
-    app.get('/users/:email', async(req,res)=>{
+    app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
-      const query = {email : email}
+      const query = { email: email };
       const result = await usersCollection.findOne(query);
       res.send(result);
     });
 
-    app.get('/allTrainers', async(req,res)=>{
-      const query = { role : 'trainer'}
+    app.get("/allTrainers", async (req, res) => {
+      const query = { role: "trainer" };
       const result = await usersCollection.find(query).toArray();
       res.send(result);
-    })
+    });
 
     app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
@@ -140,6 +177,7 @@ async function run() {
 
     app.get("/users/trainer/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
+      console.log(req.decoded, "from 178");
       if (email !== req.decoded.email) {
         return res.status(403).send({ message: "forbidden access" });
       }
@@ -150,6 +188,21 @@ async function run() {
         trainer = user?.role === "trainer";
       }
       res.send(trainer);
+    });
+
+    app.get("/users/users/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      console.log(req.decoded, "from 193");
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const query = { email: email };
+      const users = await usersCollection.findOne(query);
+      let user = false;
+      if (users) {
+        user = users?.role === "user";
+      }
+      res.send(user);
     });
 
     app.post("/users", async (req, res) => {
@@ -165,36 +218,35 @@ async function run() {
 
     // new trainers api
 
-    app.get('/applicantTrainer', async(req,res)=>{
-      const query = {role: 'member'}
+    app.get("/applicantTrainer", async (req, res) => {
+      const query = { role: "member" };
       const result = await newTrainersCollection.find(query).toArray();
       res.send(result);
-    })
+    });
 
-    app.patch('/applicantTrainer/:id', async(req,res)=>{
+    app.patch("/applicantTrainer/:id", async (req, res) => {
       const id = req.params.id;
       const updatedRole = req.body;
       console.log(id, updatedRole);
 
-      const query = {_id : new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const updatedDoc = {
         $set: {
           role: updatedRole.role,
         },
       };
-      const result = await newTrainersCollection.updateOne(query, updatedDoc)
+      const result = await newTrainersCollection.updateOne(query, updatedDoc);
 
-
-      const query2 = {email: updatedRole.email}
+      const query2 = { email: updatedRole.email };
       const updatedUser = {
         $set: {
           role: updatedRole.role,
-          payment: 'pending'
+          payment: "pending",
         },
       };
-      const result2 = await usersCollection.updateOne(query2, updatedUser)
-      res.send({result, result2});
-    })
+      const result2 = await usersCollection.updateOne(query2, updatedUser);
+      res.send({ result, result2 });
+    });
 
     app.get("/trainers", async (req, res) => {
       const query = { role: "trainer" };
@@ -215,24 +267,36 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/trainerSlots", verifyToken, async (req, res) => {
+      const email = req.decoded.email;
+      console.log(email);
+      const query = { email: email };
+      const result = await newTrainersCollection.findOne(query);
+
+      const query2 = { trainerEmail: email, role: "user" };
+      const result2 = await bookingTrainerCollection.find(query2).toArray();
+      res.send({ result, result2 });
+    });
+
     // acticles api
 
-    app.get('/articles', verifyToken, async(req,res)=>{
+    app.get("/articles", async (req, res) => {
       const page = parseInt(req.query.page);
       const size = parseInt(req.query.size);
-      const result = await articlesCollection.find()
-      .skip(page * size)
-      .limit(size)
-      .toArray();
+      const result = await articlesCollection
+        .find()
+        .skip(page * size)
+        .limit(size)
+        .toArray();
       res.send(result);
-    })
+    });
 
-    app.get('/articlesCount', async(req,res)=>{
+    app.get("/articlesCount", async (req, res) => {
       const count = await articlesCollection.estimatedDocumentCount();
-      res.send({count});
-    })
+      res.send({ count });
+    });
 
-    app.post("/articles", async(req,res)=>{
+    app.post("/articles", async (req, res) => {
       const newArticle = req.body;
       const result = await articlesCollection.insertOne(newArticle);
       res.send(result);
@@ -240,16 +304,16 @@ async function run() {
 
     // all classes api
 
-    app.get('/classes', async(req,res)=>{
+    app.get("/classes", async (req, res) => {
       const result = await classesCollection.find().toArray();
       res.send(result);
-    })
+    });
 
-    app.post('/classes', async(req,res)=>{
+    app.post("/classes", async (req, res) => {
       const newClass = req.body;
       const result = await classesCollection.insertOne(newClass);
       res.send(result);
-    })
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
