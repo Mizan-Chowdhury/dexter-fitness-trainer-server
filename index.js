@@ -7,9 +7,16 @@ const stripe = require("stripe")(process.env.SECTET_PAYMENT_PK);
 const port = process.env.PORT || 5000;
 const app = express();
 
-
 // middlewares
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+    ],
+    credentials: true,
+    optionsSuccessStatus: 200,
+  })
+);
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.qzinma9.mongodb.net/?retryWrites=true&w=majority`;
@@ -91,7 +98,7 @@ async function run() {
     });
 
     // trainer booking api
-    app.post("/bookingTrainer", async (req, res) => {
+    app.post("/bookingTrainer", verifyToken, async (req, res) => {
       const classAndSlot = req.body;
       const result = await bookingTrainerCollection.insertOne(classAndSlot);
       res.send(result);
@@ -116,7 +123,7 @@ async function run() {
       res.send({ result, result2 });
     });
 
-    app.get("/bookingPlans", async (req, res) => {
+    app.get("/bookingPlans", verifyToken, async (req, res) => {
       const result = await bookingPlansCollection.find().toArray();
       res.send(result);
     });
@@ -129,7 +136,7 @@ async function run() {
     });
 
     // subscribers api
-    app.get("/subscribers", async (req, res) => {
+    app.get("/subscribers", verifyToken, async (req, res) => {
       const result = await subscribersCollection.find().toArray();
       res.send(result);
     });
@@ -148,7 +155,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/allTrainers", async (req, res) => {
+    app.get("/allTrainers", verifyToken, async (req, res) => {
       const query = { role: "trainer" };
       const result = await usersCollection.find(query).toArray();
       res.send(result);
@@ -227,13 +234,13 @@ async function run() {
 
     // new trainers api
 
-    app.get("/applicantTrainer", async (req, res) => {
+    app.get("/applicantTrainer", verifyToken, async (req, res) => {
       const query = { role: "member" };
       const result = await newTrainersCollection.find(query).toArray();
       res.send(result);
     });
 
-    app.patch("/applicantTrainer/:id", async (req, res) => {
+    app.patch("/applicantTrainer/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const info = req.body;
       const query = { _id: new ObjectId(id) };
@@ -269,7 +276,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/newTrainers", async (req, res) => {
+    app.post("/newTrainers", verifyToken, async (req, res) => {
       const newTrainers = req.body;
       const result = await newTrainersCollection.insertOne(newTrainers);
       res.send(result);
@@ -304,7 +311,7 @@ async function run() {
       res.send({ count });
     });
 
-    app.post("/articles", async (req, res) => {
+    app.post("/articles", verifyToken, async (req, res) => {
       const newArticle = req.body;
       const result = await articlesCollection.insertOne(newArticle);
       res.send(result);
@@ -317,13 +324,13 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/classes", async (req, res) => {
+    app.post("/classes", verifyToken, async (req, res) => {
       const newClass = req.body;
       const result = await classesCollection.insertOne(newClass);
       res.send(result);
     });
 
-    app.get("/admin-stats", async (req, res) => {
+    app.get("/admin-stats", verifyToken, async (req, res) => {
       const result = await bookingTrainerCollection
         .aggregate([
           {
@@ -347,7 +354,7 @@ async function run() {
             $group: {
               _id: null,
               totalPayment: {
-                $sum: "$paymentAmount"
+                $sum: "$paymentAmount",
               },
             },
           },
@@ -356,17 +363,27 @@ async function run() {
 
       const payment = result2.length > 0 ? result2[0].totalPayment : 0;
 
-        const totalSubscriber = await subscribersCollection.estimatedDocumentCount();
-        const totalPaidUser = await bookingTrainerCollection.estimatedDocumentCount();
+      const totalSubscriber =
+        await subscribersCollection.estimatedDocumentCount();
+      const totalPaidUser =
+        await bookingTrainerCollection.estimatedDocumentCount();
 
-        const paymentDone = await bookingTrainerCollection.find().limit(6).toArray();
+      const paymentDone = await bookingTrainerCollection
+        .find()
+        .limit(6)
+        .toArray();
 
-
-      res.send({ revenue , payment, totalSubscriber, totalPaidUser, paymentDone});
+      res.send({
+        revenue,
+        payment,
+        totalSubscriber,
+        totalPaidUser,
+        paymentDone,
+      });
     });
 
     // payment intent
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
       const { salary } = req.body;
       const amount = parseInt(salary * 100);
       const paymentIntent = await stripe.paymentIntents.create({
@@ -388,9 +405,6 @@ async function run() {
   }
 }
 run().catch(console.dir);
-
-
-
 
 app.get("/", async (req, res) => {
   res.send("server is running on UI");
