@@ -295,6 +295,14 @@ async function run() {
       res.send({ result, result2 });
     });
 
+    app.get("/memberActivity", verifyToken, async (req, res) => {
+      const email = req.decoded.email;
+      console.log(email);
+      const query = { user_email: email, role: "member" };
+      const result = await bookingTrainerCollection.find(query).toArray();
+      res.send(result);
+    });
+
     // acticles api
 
     app.get("/articles", async (req, res) => {
