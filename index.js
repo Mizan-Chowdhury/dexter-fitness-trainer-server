@@ -3,6 +3,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+const stripe = require("stripe")(process.env.SECTET_PAYMENT_PK);
 const port = process.env.PORT || 5000;
 const app = express();
 // const cookieParser = require("cookie-parser");
@@ -12,8 +13,6 @@ const app = express();
 //   optionsSuccessStatus: 200
 // }
 // app.use(cookieParser());
-
-
 
 // middlewares
 app.use(cors());
@@ -118,7 +117,7 @@ async function run() {
         updatedDoc
       );
 
-      const query2 = { role: "member" };
+      const query2 = { role: "user" };
       const result2 = await usersCollection.updateOne(query2, updatedDoc);
       res.send({ result, result2 });
     });
@@ -130,7 +129,7 @@ async function run() {
 
     app.get("/allMember/:email", async (req, res) => {
       const trainerEmail = req.params.email;
-      const query = { trainerEmail: trainerEmail, role: "member" };
+      const query = { trainer_email: trainerEmail, role: "member" };
       const result = await bookingTrainerCollection.find(query).toArray();
       res.send(result);
     });
@@ -158,6 +157,22 @@ async function run() {
     app.get("/allTrainers", async (req, res) => {
       const query = { role: "trainer" };
       const result = await usersCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.patch("/allTrainers", async (req, res) => {
+      const paymentInfo = req.body;
+      const query = { email: paymentInfo.trainerEmail };
+      console.log(paymentInfo);
+      const updatedDoc = {
+        $set: {
+          payment: paymentInfo.payment,
+          paymentAmount: paymentInfo.paymentAmount,
+          joined_day: paymentInfo.paymentDate,
+          transactionId: paymentInfo.transactionId,
+        },
+      };
+      const result = await usersCollection.updateOne(query, updatedDoc);
       res.send(result);
     });
 
@@ -226,22 +241,21 @@ async function run() {
 
     app.patch("/applicantTrainer/:id", async (req, res) => {
       const id = req.params.id;
-      const updatedRole = req.body;
-      console.log(id, updatedRole);
-
+      const info = req.body;
       const query = { _id: new ObjectId(id) };
       const updatedDoc = {
         $set: {
-          role: updatedRole.role,
+          role: info.role,
         },
       };
       const result = await newTrainersCollection.updateOne(query, updatedDoc);
 
-      const query2 = { email: updatedRole.email };
+      const query2 = { email: info.email };
       const updatedUser = {
         $set: {
-          role: updatedRole.role,
+          role: info.role,
           payment: "pending",
+          joined_day: info.joinedDay,
         },
       };
       const result2 = await usersCollection.updateOne(query2, updatedUser);
@@ -273,7 +287,7 @@ async function run() {
       const query = { email: email };
       const result = await newTrainersCollection.findOne(query);
 
-      const query2 = { trainerEmail: email, role: "user" };
+      const query2 = { trainer_email: email, role: "user" };
       const result2 = await bookingTrainerCollection.find(query2).toArray();
       res.send({ result, result2 });
     });
@@ -313,6 +327,60 @@ async function run() {
       const newClass = req.body;
       const result = await classesCollection.insertOne(newClass);
       res.send(result);
+    });
+
+    app.get("/admin-stats", async (req, res) => {
+      const result = await bookingTrainerCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalRevenue: {
+                $sum: {
+                  $toInt: "$pack_price",
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
+
+      const result2 = await usersCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalPayment: {
+                $sum: "$paymentAmount"
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const payment = result2.length > 0 ? result2[0].totalPayment : 0;
+
+        const totalSubscriber = await subscribersCollection.estimatedDocumentCount();
+        const totalPaidUser = await bookingTrainerCollection.estimatedDocumentCount();
+
+
+      res.send({ revenue , payment, totalSubscriber, totalPaidUser});
+    });
+
+    // payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      const { salary } = req.body;
+      const amount = parseInt(salary * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
     });
 
     await client.db("admin").command({ ping: 1 });
