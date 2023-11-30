@@ -6,13 +6,7 @@ const jwt = require("jsonwebtoken");
 const stripe = require("stripe")(process.env.SECTET_PAYMENT_PK);
 const port = process.env.PORT || 5000;
 const app = express();
-// const cookieParser = require("cookie-parser");
-// {
-//   origin: ["http://localhost:5173"],
-//   credentials: true,
-//   optionsSuccessStatus: 200
-// }
-// app.use(cookieParser());
+
 
 // middlewares
 app.use(cors());
@@ -365,8 +359,10 @@ async function run() {
         const totalSubscriber = await subscribersCollection.estimatedDocumentCount();
         const totalPaidUser = await bookingTrainerCollection.estimatedDocumentCount();
 
+        const paymentDone = await bookingTrainerCollection.find().limit(6).toArray();
 
-      res.send({ revenue , payment, totalSubscriber, totalPaidUser});
+
+      res.send({ revenue , payment, totalSubscriber, totalPaidUser, paymentDone});
     });
 
     // payment intent
@@ -392,6 +388,9 @@ async function run() {
   }
 }
 run().catch(console.dir);
+
+
+
 
 app.get("/", async (req, res) => {
   res.send("server is running on UI");
