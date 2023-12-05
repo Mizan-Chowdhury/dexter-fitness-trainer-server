@@ -37,7 +37,7 @@ async function run() {
     // create secret token
     app.post("/jwt", (req, res) => {
       const user = req.body;
-      // console.log(user, 'from create token');
+      // console.log(user, "from create token");
       const token = jwt.sign(user, process.env.SECRET_TOKEN, {
         expiresIn: "240h",
       });
@@ -109,6 +109,7 @@ async function run() {
     app.patch("/bookingTrainer/:id", async (req, res) => {
       const id = req.params.id;
       const newRole = req.body.role;
+      const userEmail = req.body.email;
       const query = { _id: new ObjectId(id) };
       const updatedDoc = {
         $set: {
@@ -120,7 +121,7 @@ async function run() {
         updatedDoc
       );
 
-      const query2 = { role: "user" };
+      const query2 = { email : userEmail, role: "member" };
       const result2 = await usersCollection.updateOne(query2, updatedDoc);
       res.send({ result, result2 });
     });
@@ -132,7 +133,7 @@ async function run() {
 
     app.get("/allMember/:email", async (req, res) => {
       const trainerEmail = req.params.email;
-      const query = { trainer_email: trainerEmail, role: "member" };
+      const query = { trainer_email: trainerEmail, role: "user" };
       const result = await bookingTrainerCollection.find(query).toArray();
       res.send(result);
     });
@@ -290,15 +291,15 @@ async function run() {
       const query = { email: email };
       const result = await newTrainersCollection.findOne(query);
 
-      const query2 = { trainer_email: email, role: "user" };
+      const query2 = { trainer_email: email, role: "member" };
       const result2 = await bookingTrainerCollection.find(query2).toArray();
       res.send({ result, result2 });
     });
 
     app.get("/memberActivity", verifyToken, async (req, res) => {
       const email = req.decoded.email;
-      console.log(email);
-      const query = { user_email: email, role: "member" };
+      console.log(email, 'from 300');
+      const query = { user_email: email, role: "user" };
       const result = await bookingTrainerCollection.find(query).toArray();
       res.send(result);
     });
